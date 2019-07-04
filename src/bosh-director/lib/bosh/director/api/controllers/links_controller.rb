@@ -14,18 +14,24 @@ module Bosh::Director
       get '/', authorization: :read do
         if params['deployment']
           deployment = @deployment_manager.find_by_name(params['deployment'])
-          consumers = Models::Links::LinkConsumer.where(deployment: deployment)
-        else
-          consumers = Models::Links::LinkConsumer.all
+          filters[:deployment] = deployment
         end
 
         result = []
+        if params['provider_id']
+          filters[:link_provider_id] = params['provider_id']
 
-        consumers.each do |consumer|
-          Models::Links::LinkConsumerIntent.where(link_consumer: consumer).each do |consumer_intent|
-            links = Models::Links::Link.where(link_consumer_intent: consumer_intent)
-            links.each do |link|
-              result << generate_link_hash(link)
+          Models::Links::Link.where(filters).each do |link|
+            result << generate_link_hash(link)
+          end
+        else
+          consumers = Models::Links::LinkConsumer.where(filters)
+          consumers.each do |consumer|
+            Models::Links::LinkConsumerIntent.where(link_consumer: consumer).each do |consumer_intent|
+              links = Models::Links::Link.where(link_consumer_intent: consumer_intent)
+              links.each do |link|
+                result << generate_link_hash(link)
+              end
             end
           end
         end
