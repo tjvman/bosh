@@ -755,8 +755,8 @@ describe 'links api', type: :integration do
           deploy_simple_manifest(manifest_hash: manifest_hash)
         end
 
-        it 'returns the link' do
-          actual_response = get_json('/links?provider_id=1', '')
+        it 'returns the links with the specified id' do
+          actual_response = get_json('/links', 'provider_id=1')
 
           expect(actual_response).to match(expected_response)
         end

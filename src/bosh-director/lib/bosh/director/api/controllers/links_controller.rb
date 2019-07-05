@@ -12,28 +12,28 @@ module Bosh::Director
       end
 
       get '/', authorization: :read do
-        if params['deployment']
+        if params['provider_id'] && params['deployment']
           deployment = @deployment_manager.find_by_name(params['deployment'])
-          filters[:deployment] = deployment
+          links_for_consumers = get_consumed_links_for_deployment(deployment)
+
+          provider = get_provider_by_id(params['provider_id'])
+
+          desired_links = links_for_consumers.select do |l|
+            l.link_provider_intent.link_provider == provider # TODO: this is `2n` db calls, improve.
+          end
+        elsif params['provider_id']
+          provider = get_provider_by_id(params['provider_id'])
+
+          desired_links = provider.intents.map(&:links).flatten # TODO: could this be more efficient?
+        elsif params['deployment']
+          deployment = @deployment_manager.find_by_name(params['deployment'])
+          desired_links = get_consumed_links_for_deployment(deployment)
+        else
+          desired_links = Models::Links::Link.all
         end
 
-        result = []
-        if params['provider_id']
-          filters[:link_provider_id] = params['provider_id']
-
-          Models::Links::Link.where(filters).each do |link|
-            result << generate_link_hash(link)
-          end
-        else
-          consumers = Models::Links::LinkConsumer.where(filters)
-          consumers.each do |consumer|
-            Models::Links::LinkConsumerIntent.where(link_consumer: consumer).each do |consumer_intent|
-              links = Models::Links::Link.where(link_consumer_intent: consumer_intent)
-              links.each do |link|
-                result << generate_link_hash(link)
-              end
-            end
-          end
+        result = desired_links.map do |link|
+          generate_link_hash(link)
         end
 
         body(json_encode(result))
@@ -63,13 +63,29 @@ module Bosh::Director
 
       private
 
+      def get_provider_by_id(provider_id)
+        provider = Models::Links::LinkProvider[provider_id]
+        raise LinkLookupError, "Invalid link provider id: #{provider_id}" if provider.nil?
+
+        provider
+      end
+
+      def get_consumed_links_for_deployment(deployment_model)
+        consumers = Models::Links::LinkConsumer.where(deployment: deployment_model)
+        # TODO: this is `2n` db calls (i think), improve.
+        links_for_consumers = consumers.map do |c|
+          Models::Links::LinkConsumerIntent.where(link_consumer: c).map(&:links)
+        end
+        links_for_consumers.flatten!
+      end
+
       def generate_link_hash(model)
         {
-          :id => model.id.to_s,
-          :name => model.name,
-          :link_consumer_id => model[:link_consumer_intent_id].to_s,
-          :link_provider_id => (model[:link_provider_intent_id].nil? ? nil : model[:link_provider_intent_id].to_s),
-          :created_at => model.created_at,
+          id: model.id.to_s,
+          name: model.name,
+          link_consumer_id: model[:link_consumer_intent_id].to_s,
+          link_provider_id: (model[:link_provider_intent_id].nil? ? nil : model[:link_provider_intent_id].to_s),
+          created_at: model.created_at,
         }
       end
     end

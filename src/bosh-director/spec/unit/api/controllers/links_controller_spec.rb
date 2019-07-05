@@ -64,6 +64,12 @@ module Bosh::Director
           expect(last_response.body).to eq("{\"code\":70000,\"description\":\"Deployment 'invalid_deployment_name' doesn't exist\"}")
         end
 
+        it '404s when given an invalid provider ID' do
+          get '/?provider_id=9000'
+          expect(last_response.status).to eq(404)
+          expect(last_response.body).to eq('{"code":810000,"description":"Invalid link provider id: 9000"}')
+        end
+
         context 'and there are links in the database' do
           let!(:other_deployment) do
             Models::Deployment.create(
@@ -78,37 +84,84 @@ module Bosh::Director
           let(:consumer_intent_3) { create_consumer_for_deployment(other_deployment) }
 
           let(:provider_intent_1) { create_provider_for_deployment(deployment) }
-          let(:provider_intent_2) { create_provider_for_deployment(other_deployment) }
+          let(:provider_intent_2) { create_provider_for_deployment(deployment) }
+          let(:provider_intent_3) { create_provider_for_deployment(other_deployment) }
 
-          let!(:link_1) { create_link_from_intents(consumer_intent_1, provider_intent_1) }
-          let!(:link_2) { create_link_from_intents(consumer_intent_2, provider_intent_1) }
-          let!(:link_3) { create_link_from_intents(consumer_intent_3, provider_intent_2) }
+          let!(:deployment_1_link_1) { create_link_from_intents(consumer_intent_1, provider_intent_1) }
+          let!(:deployment_2_link_1) { create_link_from_intents(consumer_intent_3, provider_intent_3) }
+          let!(:deployment_2_link_2) { create_link_from_intents(consumer_intent_3, provider_intent_1) }
 
           context 'when a deployment is specified' do
+            let!(:deployment_1_link_2) { create_link_from_intents(consumer_intent_2, provider_intent_1) }
+
             it 'should return a list of links for specified deployment' do
               get "/?deployment=#{deployment.name}"
               expect(last_response.status).to eq(200)
-              expect(JSON.parse(last_response.body)).to contain_exactly(generate_link_hash(link_1), generate_link_hash(link_2))
-            end
-          end
-
-          context 'when no deployment is specified' do
-            it 'should return a list of links all deployments' do
-              get '/'
-              expect(last_response.status).to eq(200)
               expect(JSON.parse(last_response.body)).to contain_exactly(
-                generate_link_hash(link_1),
-                generate_link_hash(link_2),
-                generate_link_hash(link_3),
+                generate_link_hash(deployment_1_link_1),
+                generate_link_hash(deployment_1_link_2),
               )
             end
 
             context 'when a provider_id is specified' do
-              it 'returns links with that provider ID' do
+              let!(:link_with_different_provider_and_same_deployment) do
+                create_link_from_intents(consumer_intent_2, provider_intent_2)
+              end
+              let!(:link_with_same_provider_and_different_deployment) do
+                create_link_from_intents(consumer_intent_3, provider_intent_1)
+              end
+
+              context 'and the specified deployment has links with that provider' do
+                it 'returns the links for the specified deployment and provider id' do
+                  get "/?deployment=#{deployment.name}&provider_id=#{provider_intent_1.link_provider_id}"
+                  expect(last_response.status).to eq(200)
+                  expect(JSON.parse(last_response.body)).to contain_exactly(
+                    generate_link_hash(deployment_1_link_1),
+                    generate_link_hash(deployment_1_link_2),
+                  )
+                end
+              end
+
+              context 'and the specified deployment does not have links with that provider' do
+                it 'returns an empty list of links' do
+                  get "/?deployment=#{deployment.name}&provider_id=#{provider_intent_3.link_provider_id}"
+                  expect(last_response.status).to eq(200)
+                  expect(JSON.parse(last_response.body)).to be_empty
+                end
+              end
+            end
+          end
+
+          context 'when no deployment is specified' do
+            it 'should return a list of links in all deployments' do
+              get '/'
+              expect(last_response.status).to eq(200)
+              expect(JSON.parse(last_response.body)).to contain_exactly(
+                generate_link_hash(deployment_1_link_1),
+                generate_link_hash(deployment_2_link_1),
+                generate_link_hash(deployment_2_link_2),
+              )
+            end
+
+            context 'when a provider_id is specified' do
+              it 'returns links for all deployments with that provider ID' do
                 get "/?provider_id=#{provider_intent_1.link_provider_id}"
                 expect(last_response.status).to eq(200)
-                expect(JSON.parse(last_response.body)).to contain_exactly(generate_link_hash(link_1), generate_link_hash(link_2))
+                expect(JSON.parse(last_response.body)).to contain_exactly(
+                  generate_link_hash(deployment_1_link_1),
+                  generate_link_hash(deployment_2_link_2),
+                )
               end
+            end
+          end
+
+          context 'when an unconsumed provider ID is specified' do
+            let(:unconsumed_provider_intent) { create_provider_for_deployment(other_deployment) }
+
+            it 'returns an empty list' do
+              get "/?provider_id=#{unconsumed_provider_intent.link_provider_id}"
+              expect(last_response.status).to eq(200)
+              expect(JSON.parse(last_response.body)).to be_empty
             end
           end
         end
