@@ -72,11 +72,11 @@ module Bosh::Director
 
       def get_consumed_links_for_deployment(deployment_model)
         consumers = Models::Links::LinkConsumer.where(deployment: deployment_model)
-        # TODO: this is `2n` db calls (i think), improve.
         links_for_consumers = consumers.map do |c|
-          Models::Links::LinkConsumerIntent.where(link_consumer: c).map(&:links)
+          Models::Links::LinkConsumerIntent.where(link_consumer: c).map(&:links) # TODO: this is `2n` db calls (i think), improve.
         end
-        links_for_consumers.flatten!
+
+        links_for_consumers.flatten
       end
 
       def generate_link_hash(model)
