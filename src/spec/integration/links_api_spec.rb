@@ -676,22 +676,48 @@ describe 'links api', type: :integration do
     end
 
     context 'when deployment is not specified' do
-      it 'should raise an error' do
-        actual_response = get_json('/links', '')
+      let(:jobs) { explicit_provider_and_consumer }
+      let(:expected_response) do
+        [{
+          'id' => '1',
+          'name' => 'provider',
+          'link_consumer_id' => '1',
+          'link_provider_id' => '1',
+          'created_at' => String,
+        }, {
+          'id' => '2',
+          'name' => 'provider',
+          'link_consumer_id' => '2',
+          'link_provider_id' => '2',
+          'created_at' => String,
+        }]
+      end
 
-        expected_error = Bosh::Director::DeploymentRequired.new('Deployment name is required')
-        expected_response = {
-          'code' => expected_error.error_code,
-          'description' => expected_error.message,
-        }
+      before do
+        deploy_simple_manifest(manifest_hash: manifest_hash)
+
+        second_manifest = manifest_hash.merge('name' => 'simple-second')
+        deploy_simple_manifest(manifest_hash: second_manifest)
+      end
+
+      it 'returns all links for all deployments' do
+        actual_response = get_json('/links', '')
 
         expect(actual_response).to match(expected_response)
       end
     end
 
-    context 'when user does not have sufficient permissions' do
+    context 'when user does not have sufficient permissions to get links for a single deployment' do
       it 'should raise an error' do
         response = send_director_get_request('/links', 'deployment=simple', {})
+
+        expect(response.read_body).to include("Not authorized: '/links'")
+      end
+    end
+
+    context 'when user does not have sufficient permissions to get links for all deployments' do
+      it 'should raise an error' do
+        response = send_director_get_request('/links', '', {})
 
         expect(response.read_body).to include("Not authorized: '/links'")
       end

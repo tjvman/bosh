@@ -63,12 +63,6 @@ module Bosh::Director
           expect(last_response.body).to eq("{\"code\":70000,\"description\":\"Deployment 'invalid_deployment_name' doesn't exist\"}")
         end
 
-        it 'returns 400 if deployment name is not provided' do
-          get '/'
-          expect(last_response.status).to eq(400)
-          expect(last_response.body).to eq('{"code":190024,"description":"Deployment name is required"}')
-        end
-
         context 'and there are links in the database' do
           let!(:consumer_1) do
             Models::Links::LinkConsumer.create(
@@ -123,10 +117,56 @@ module Bosh::Director
               )
           end
 
-          it 'should return a list of links for specified deployment' do
-            get "/?deployment=#{consumer_1.deployment.name}"
-            expect(last_response.status).to eq(200)
-            expect(JSON.parse(last_response.body)).to eq([generate_link_hash(link_1), generate_link_hash(link_2)])
+          let!(:other_deployment) do
+            Models::Deployment.create(
+              name: 'test_deployment_2',
+              manifest: YAML.dump('foo' => 'bar'),
+              links_serial_id: link_serial_id,
+            )
+          end
+          let!(:consumer_3) do
+            Models::Links::LinkConsumer.create(
+              deployment: other_deployment,
+              instance_group: 'instance_group',
+              type: 'job',
+              name: 'job_name_3',
+            )
+          end
+          let!(:consumer_intent_3) do
+            Models::Links::LinkConsumerIntent.create(
+              link_consumer: consumer_3,
+              original_name: 'link_3',
+              type: 'link_type_3',
+              optional: false,
+              blocked: false,
+            )
+          end
+          let!(:link_3) do
+            Models::Links::Link.create(
+              name: 'link_3',
+              link_provider_intent_id: nil,
+              link_consumer_intent_id: consumer_intent_3.id,
+              link_content: 'content 3',
+              created_at: Time.now,
+            )
+          end
+
+          context 'when a deployment is specified' do
+            it 'should return a list of links for specified deployment' do
+              get "/?deployment=#{consumer_1.deployment.name}"
+              expect(last_response.status).to eq(200)
+              expect(JSON.parse(last_response.body)).to eq([generate_link_hash(link_1), generate_link_hash(link_2)])
+            end
+          end
+
+          context 'when no deployment is specified' do
+            it 'should return a list of links all deployments' do
+              get '/'
+              expect(last_response.status).to eq(200)
+              expect(JSON.parse(last_response.body)).to eq(
+                [generate_link_hash(link_1), generate_link_hash(link_2), generate_link_hash(link_3)],
+              )
+            end
           end
         end
       end

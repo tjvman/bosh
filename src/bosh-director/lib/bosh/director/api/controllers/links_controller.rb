@@ -12,15 +12,16 @@ module Bosh::Director
       end
 
       get '/', authorization: :read do
-        if params['deployment'].nil?
-          raise DeploymentRequired, 'Deployment name is required'
+        if params['deployment']
+          deployment = @deployment_manager.find_by_name(params['deployment'])
+          consumers = Models::Links::LinkConsumer.where(deployment: deployment)
+        else
+          consumers = Models::Links::LinkConsumer.all
         end
-
-        deployment = @deployment_manager.find_by_name(params['deployment'])
 
         result = []
 
-        Models::Links::LinkConsumer.where(deployment: deployment).each do |consumer|
+        consumers.each do |consumer|
           Models::Links::LinkConsumerIntent.where(link_consumer: consumer).each do |consumer_intent|
             links = Models::Links::Link.where(link_consumer_intent: consumer_intent)
             links.each do |link|
