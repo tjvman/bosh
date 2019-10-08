@@ -707,6 +707,60 @@ describe 'links api', type: :integration do
       end
     end
 
+    context 'when a link provider id is specified' do
+      context 'when there are links with that provider id' do
+        let(:provider_1) do
+          {
+            'name' => 'provider',
+            'release' => 'bosh-release',
+            'provides' => { 'provider' => { 'as' => 'foo' } },
+          }
+        end
+        let(:provider_2) do
+          {
+            'name' => 'alternate_provider',
+            'release' => 'bosh-release',
+            'provides' => { 'provider' => { 'as' => 'bar' } },
+          }
+        end
+        let(:consumer_1) do
+          {
+            'name' => 'consumer',
+            'release' => 'bosh-release',
+            'consumes' => { 'provider' => { 'from' => 'foo' } },
+          }
+        end
+        let(:consumer_2) do
+          {
+            'name' => 'consumer_no_instance_address',
+            'release' => 'bosh-release',
+            'consumes' => { 'provider' => { 'from' => 'bar' } },
+          }
+        end
+        let(:jobs) { [provider_1, consumer_1, provider_2, consumer_2] }
+
+        let(:expected_response) do
+          [{
+            'id' => '1',
+            'name' => 'provider',
+            'link_consumer_id' => '1',
+            'link_provider_id' => '1',
+            'created_at' => String,
+          }]
+        end
+
+        before do
+          deploy_simple_manifest(manifest_hash: manifest_hash)
+        end
+
+        it 'returns the links with the specified id' do
+          actual_response = get_json('/links', 'provider_id=1')
+
+          expect(actual_response).to match(expected_response)
+        end
+      end
+    end
+
     context 'when user does not have sufficient permissions to get links for a single deployment' do
       it 'should raise an error' do
         response = send_director_get_request('/links', 'deployment=simple', {})
