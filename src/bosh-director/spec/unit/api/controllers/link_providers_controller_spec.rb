@@ -129,6 +129,61 @@ module Bosh::Director
         end
       end
 
+      context 'when fetching link provider by id' do
+        context 'when user has read access' do
+          before do
+            basic_authorize 'reader', 'reader'
+          end
+
+          context 'when a link provider with the specified id exists' do
+            let(:deployment) { Models::Deployment.create(name: 'test_deployment', manifest: YAML.dump('foo' => 'bar')) }
+
+            let!(:link_provider) do
+              Models::Links::LinkProvider.create(
+                deployment: deployment,
+                instance_group: 'instance_group',
+                type: 'job',
+                name: 'job_name',
+              )
+            end
+            let!(:link_provider_intent) do
+              Models::Links::LinkProviderIntent.create(
+                name: 'link_name',
+                link_provider: link_provider,
+                shared: false,
+                consumable: true,
+                type: 'link_type',
+                original_name: 'link_original_name',
+                content: 'welcome',
+              )
+            end
+
+            it 'returns the link provider' do
+              get '/1'
+              expect(last_response.status).to eq(200)
+              expect(JSON.parse(last_response.body)).to eq(generate_provider_hash(link_provider_intent))
+            end
+          end
+
+          context 'when no link provider with the specified id exists' do
+            it 'returns a not found error' do
+              get '/1'
+              expect(last_response.status).to eq(404)
+            end
+          end
+        end
+
+        context 'when the user does not have read access' do
+          before do
+            basic_authorize 'invalid', 'invalid'
+          end
+
+          it 'returns a 401' do
+            expect(get('/1').status).to eq(401)
+          end
+        end
+      end
+
       def generate_provider_hash(model)
         provider = model.link_provider
         {
@@ -146,8 +201,8 @@ module Bosh::Director
             'name' => provider.name,
             'info' => {
               'instance_group' => provider.instance_group,
-            }
-          }
+            },
+          },
         }
       end
     end

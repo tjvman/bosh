@@ -401,6 +401,50 @@ describe 'links api', type: :integration do
     end
   end
 
+  context 'when requesting a link provider by id' do
+    let(:jobs) { [{ 'name' => 'provider', 'release' => 'bosh-release' }] }
+
+    before do
+      puts 'Setting up...'
+      deploy_simple_manifest(manifest_hash: manifest_hash)
+      puts 'Setup commplete'
+    end
+
+    context 'when a link provider with that id exists' do
+      let(:link_provider_response) do
+        {
+          'id' => '1',
+          'name' => 'provider',
+          'shared' => false,
+          'deployment' => 'simple',
+          'link_provider_definition' => {
+            'name' => 'provider',
+            'type' => 'provider',
+          },
+          'owner_object' => {
+            'name' => 'provider',
+            'type' => 'job',
+            'info' => {
+              'instance_group' => 'foobar',
+            },
+          },
+        }
+      end
+
+      it 'returns the link provider' do
+        expect(get_json('/link_providers/1', '')).to eq(link_provider_response)
+      end
+    end
+
+    context 'when no link provider has that id' do
+      it 'returns a not found error' do
+        response = send_director_get_request('/link_providers/100', '')
+
+        expect(response).to be_an_instance_of(Net::HTTPNotFound)
+      end
+    end
+  end
+
   context 'when requesting for a list of consumers via link_consumers endpoint' do
     before do
       deploy_simple_manifest(manifest_hash: manifest_hash)
