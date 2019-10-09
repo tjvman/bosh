@@ -148,6 +148,58 @@ module Bosh::Director
 
       end
 
+      context 'when fetching link consumer by id' do
+        context 'when user has read access' do
+          before do
+            basic_authorize 'reader', 'reader'
+          end
+
+          context 'when a link consumer with the specified id exists' do
+            let(:deployment) { Models::Deployment.create(name: 'test_deployment', manifest: YAML.dump('foo' => 'bar')) }
+
+            let!(:link_consumer) do
+              Models::Links::LinkConsumer.create(
+                deployment: deployment,
+                instance_group: 'instance_group',
+                type: 'job',
+                name: 'job_name',
+              )
+            end
+            let!(:link_consumer_intent) do
+              Models::Links::LinkConsumerIntent.create(
+                name: 'link_name',
+                link_consumer: link_consumer,
+                type: 'link_type',
+                original_name: 'link_original_name',
+              )
+            end
+
+            it 'returns the link consumer' do
+              get '/1'
+              expect(last_response.status).to eq(200)
+              expect(JSON.parse(last_response.body)).to eq(generate_consumer_hash(link_consumer_intent))
+            end
+          end
+
+          context 'when no link consumer with the specified id exists' do
+            it 'returns a not found error' do
+              get '/1'
+              expect(last_response.status).to eq(404)
+            end
+          end
+        end
+
+        context 'when the user does not have read access' do
+          before do
+            basic_authorize 'invalid', 'invalid'
+          end
+
+          it 'returns a 401' do
+            expect(get('/1').status).to eq(401)
+          end
+        end
+      end
+
       def generate_consumer_hash(model)
         consumer = model.link_consumer
         result = {
@@ -163,8 +215,8 @@ module Bosh::Director
             },
           },
           'link_consumer_definition' => {
-              'type' => model.type,
-              'name' => model.original_name,
+            'type' => model.type,
+            'name' => model.original_name,
           },
         }
         result['owner_object'].delete('info') if consumer.instance_group == ''

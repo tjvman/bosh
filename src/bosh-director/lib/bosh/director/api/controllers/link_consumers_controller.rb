@@ -10,6 +10,14 @@ module Bosh::Director
         @deployment_manager = Api::DeploymentManager.new
       end
 
+      get '/:id', authorization: :read do
+        link_consumer_intent = Bosh::Director::Models::Links::LinkConsumerIntent[params['id']]
+        return status(404) if link_consumer_intent.nil?
+
+        result = generate_consumer_hash(link_consumer_intent)
+        body(json_encode(result))
+      end
+
       get '/', authorization: :read do
         if params['deployment'].nil?
           raise DeploymentRequired, 'Deployment name is required'

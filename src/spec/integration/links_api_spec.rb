@@ -405,9 +405,7 @@ describe 'links api', type: :integration do
     let(:jobs) { [{ 'name' => 'provider', 'release' => 'bosh-release' }] }
 
     before do
-      puts 'Setting up...'
       deploy_simple_manifest(manifest_hash: manifest_hash)
-      puts 'Setup commplete'
     end
 
     context 'when a link provider with that id exists' do
@@ -513,6 +511,48 @@ describe 'links api', type: :integration do
         response = send_director_get_request('/link_consumers', 'deployment=simple', {})
 
         expect(response.read_body).to include("Not authorized: '/link_consumers'")
+      end
+    end
+  end
+
+  context 'when requesting a link consumer by id' do
+    let(:jobs) { implicit_provider_and_consumer }
+
+    before do
+      deploy_simple_manifest(manifest_hash: manifest_hash)
+    end
+
+    context 'when a link consumer with that id exists' do
+      let(:link_consumer_response) do
+        {
+          'id' => '1',
+          'name' => 'provider',
+          'deployment' => 'simple',
+          'link_consumer_definition' => {
+            'name' => 'provider',
+            'type' => 'provider',
+          },
+          'optional' => false,
+          'owner_object' => {
+            'name' => 'consumer',
+            'type' => 'job',
+            'info' => {
+              'instance_group' => 'foobar',
+            },
+          },
+        }
+      end
+
+      it 'returns the link consumer' do
+        expect(get_json('/link_consumers/1', '')).to eq(link_consumer_response)
+      end
+    end
+
+    context 'when no link consumer has that id' do
+      it 'returns a not found error' do
+        response = send_director_get_request('/link_consumers/100', '')
+
+        expect(response).to be_an_instance_of(Net::HTTPNotFound)
       end
     end
   end
